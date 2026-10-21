@@ -1,0 +1,12 @@
+# The measured tables are pinned by SHA-256 in mspine/tables/PROVENANCE.md and
+# checked on load. Git's CRLF normalisation therefore has to be switched off for
+# them: with core.autocrlf=true a Windows checkout stored LF in the blob while the
+# pinned digest named the CRLF bytes, so the same commit verified on Windows and
+# failed on Linux with a hash mismatch. A digest that depends on which machine
+# cloned it is not a digest.
+#
+# This is not hypothetical -- it is the failure the first CI run reported:
+#   ccpp/ccpp.csv hash mismatch: 76855630... != 79e1c452...
+mspine/tables/**/*.csv   -text
+mspine/tables/**/*.txt   -text
+LICENSE-kinetics-spine   -text
