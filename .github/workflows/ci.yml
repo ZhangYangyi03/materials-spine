@@ -29,6 +29,9 @@ jobs:
       - name: the invariants
         run: python -m pytest tests -q
 
+      - name: the published numbers still come out the same
+        run: python -m pytest tests -q -m slow
+
       - name: every pinned table still hashes to its recorded digest
         run: python -m mspine verify
 

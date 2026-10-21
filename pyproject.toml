@@ -42,3 +42,10 @@ mspine = [
   "tables/carbon_fiber/*.csv",
   "mechanisms/*.py",
 ]
+
+[tool.pytest.ini_options]
+# `pytest tests` is the fast invariant set. The tests that re-derive a published
+# number run whole campaigns on the 4599-cell table and are opt-in, both locally
+# and in CI, because they are the ones that take minutes.
+markers = ["slow: re-derives a number a document quotes, on the full table"]
+addopts = "-m 'not slow'"

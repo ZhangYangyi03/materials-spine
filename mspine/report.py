@@ -63,30 +63,58 @@ def main(argv=None):
         # the report keeps the LAST row per (table, arm, control) rather than
         # printing the whole history. The first version of this loop printed
         # every row and every law twice for exactly that reason.
+        # A row is keyed by (arm, fitting policy, control). The policy is part of
+        # the key on purpose: two runs of the same arm under different fitting
+        # policies are two different arms, and collapsing them would let the
+        # later row silently overwrite the earlier one.
+        # A campaign row is keyed by (table, arm, fitting policy, control). The
+        # policy is part of the key on purpose: one arm under two fitting policies
+        # is two arms, and collapsing them would let the later row overwrite the
+        # earlier one silently. Within a key the LAST row wins, because the ledger
+        # is append-only and a re-run is a newer measurement of the same thing --
+        # superseding, not contradicting. The seed count is printed so a 1-seed
+        # check can never be mistaken for a study.
         by_table = {}
         for r in rows:
             table = str(r["subject"]).split("/")[0]
             p = r["payload"]
-            by_table.setdefault(table, {}).setdefault(p["arm"], {})[p["control"]] = p
+            key = (p["arm"], int(p.get("refit", 0)))
+            by_table.setdefault(table, {}).setdefault(key, {})[p["control"]] = p
         for table in sorted(by_table):
             by = by_table[table]
-            print("\nSCREENING %s -- held-out gain; control = the same pipeline on" % table)
-            print("           permuted responses, which must collapse to zero")
-            print("  %-7s %7s %8s %8s %8s %8s %7s"
-                  % ("arm", "n", "gain", "sd", "rank", "top10", "control"))
+            counts = {}
+            for slot in by.values():
+                for p in slot.values():
+                    counts[p["n"]] = counts.get(p["n"], 0) + 1
+            n_mode = max(counts, key=lambda k: (counts[k], -k))
+            hidden = sum(1 for slot in by.values()
+                         if not any(p["n"] == n_mode for p in slot.values()))
+            note = ("" if not hidden else
+                    "\n(%d arm/policy rows come from runs with a different seed"
+                    " count, are on the chain, and are not shown)" % hidden)
+            print("\nSCREENING %s -- held-out gain, %d seeds; control = the same"
+                  % (table, n_mode))
+            print("           pipeline on permuted responses, which must collapse to zero")
+            print("  %-7s %3s %7s %8s %8s %8s %8s %7s"
+                  % ("arm", "rfi", "n", "gain", "sd", "rank", "top10", "control"))
             order = sorted(by, key=lambda a: -by[a].get(False, {}).get("gain_mean", -1e9))
-            for arm in order:
-                p = by[arm].get(False)
-                if p is None:
+            for key in order:
+                arm, refit = key
+                p = by[key].get(False)
+                if p is None or p["n"] != n_mode:
                     continue
-                c = by[arm].get(True)
-                print("  %-7s %7d %+8.2f %8.2f %+8.3f %8.2f %7s"
-                      % (arm, p["n"], p["gain_mean"], p["gain_sd"],
+                c = by[key].get(True)
+                print("  %-7s %3d %7d %+8.2f %8.2f %+8.3f %8.2f %7s"
+                      % (arm, refit, p["n"], p["gain_mean"], p["gain_sd"],
                          p["rank_corr_mean"], p["top10_recovery_mean"],
                          ("%+.2f" % c["gain_mean"]) if c else "-"))
-            best = order[0]
-            print("  best held-out gain: %s (%+.2f)"
-                  % (best, by[best][False]["gain_mean"]))
+            shown = [k for k in order if by[k].get(False)
+                     and by[k][False]["n"] == n_mode]
+            if shown:
+                b = shown[0]
+                print("  best held-out gain: %s (refit=%d, %+.2f)"
+                      % (b[0], b[1], by[b][False]["gain_mean"]))
+            print(note)
 
     for r in _last(_latest(led, "law", "hydration/form")):
         p = r["payload"]

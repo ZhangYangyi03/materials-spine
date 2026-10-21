@@ -20,6 +20,7 @@ one hash chain, one report.
 
     python -m mspine tables      # what ships, with coverage and provenance per table
     python -m mspine bench       # run the campaigns, the laws and the mechanism
+    python -m mspine bench --refits 0,8   # both fitting policies, side by side
     python -m mspine report      # print what the ledger holds, and nothing else
     python -m mspine verify      # re-derive every pinned digest and the chain
     python -m pytest tests -q    # the invariants
@@ -52,23 +53,32 @@ apples to a plate.
 ## What the screening actually found
 
 64 experiments, batches of 8, 3 seeds, held-out gain (mean measured response of
-the top decile the surrogate picked, minus the held-out mean) with the permuted
-control beside it:
+the top decile the surrogate picked, minus the mean of everything it did not
+pick) with the permuted control beside it:
 
-    buchwald   ofat +28.6   random +27.9   fill +23.9   ucb +20.6   ei +19.7
-    ccpp       fill +28.7   pi +27.5      ofat +27.4   ei +26.9   random +26.3
-    concrete   fill +21.5   random +18.9   ucb +16.9    ofat +16.3  ei +12.4
+    table      arms, best first                                    control
+    buchwald   ofat +28.6  random +27.9  qei +27.8  fill +23.9  ei +19.7   ~0
+    ccpp       fill +28.7  qei +28.2     pi +27.5   ofat +27.4  ei +26.9   ~0
+    concrete   fill +21.5  random +18.9  ucb +16.9  qei +16.5  ofat +16.3   ~0
 
 Every control collapses to about zero, which is the part that makes the numbers
 worth reading: the gain is coming from the measured outcomes, not from the
 features' correlation with themselves.
 
 The uncomfortable part, kept in the table rather than in a footnote: on none of
-the three tables does a Bayesian acquisition beat the two baselines a chemist
+the three tables does any Bayesian acquisition beat the best baseline a chemist
 would use without a model. One-factor-at-a-time wins Buchwald. Greedy
-space-filling wins the other two. EI is last or second-last on all three. If the
-project had reported only its best arm it would have reported the opposite of
-its own result.
+space-filling wins ccpp and concrete. If the project had reported only its best
+arm it would have reported the opposite of its own result.
+
+**And the number depends on how the surrogate is fitted, which is why that is a
+column now.** `qei` reaches +27.8 on Buchwald only when the marginal-likelihood
+fit is re-run after every batch; with the default (fit once on the initial
+design, then condition) it gets +19.2, below one-factor-at-a-time. Both policies
+are run side by side by `python -m mspine bench --refits 0,8`, and both are rows
+on the chain, because a single number without the policy is not a result. What
+that difference actually is -- one seed out of five recovering from a stall, not a
+general advantage -- is worked out in [docs/paper.md](docs/paper.md).
 
 ## The laws, and the one that failed
 
@@ -121,7 +131,8 @@ candidates. It is a measuring instrument, not a mechanism-reduction algorithm.
 
 ## Reproducing
 
-    python -m mspine bench --tables buchwald,ccpp,concrete --seeds 3 --budget 64
+    python -m mspine bench --tables buchwald,ccpp,concrete --seeds 3 --budget 64 \
+        --refits 0,8
     python -m mspine report
 
 Every number above is a row on `results/ledger.jsonl`, each hashed with its

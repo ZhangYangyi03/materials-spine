@@ -66,3 +66,17 @@ def test_budget_is_respected():
         assert len(obs) == 32
         assert trace[-1]["spent"] == 32
         assert len({i for i, _ in obs}) == 32      # no cell spent twice
+
+
+def test_fitting_policy_is_part_of_the_record():
+    """Two policies are two arms; neither may overwrite the other in the aggregate."""
+    space, codes, y, meta = data.concrete()
+    recs = []
+    for refit in (0, 8):
+        r = campaign.run_one(space, codes, y, "concrete", arm="ei", budget=24,
+                             seed=0, refit=refit)
+        assert r["refit"] == refit
+        recs.append(r)
+    rows = campaign.aggregate(recs)
+    assert len(rows) == 2
+    assert {row["refit"] for row in rows} == {0, 8}

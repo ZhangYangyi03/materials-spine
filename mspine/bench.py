@@ -7,8 +7,11 @@ typed by hand from a run that is not on the chain.
 Design of the comparison, stated here so a reader can attack it:
 
   * every arm gets the same initial design, the same budget, the same batch size;
-  * the surrogate's hyperparameters are fitted once, on the initial design, and
-    then held -- no per-batch re-tuning unless a study says so explicitly;
+  * the fitting policy is stated, because it is a variable and not a detail: by
+    default the surrogate's hyperparameters are fitted once on the initial design
+    and then held, and `--refits 0,8` runs both policies side by side so the cost
+    of re-tuning after every batch is a number in the report rather than an
+    assumption in a docstring;
   * each (arm, seed) is run twice: once on the real responses and once on
     responses permuted across cells. The permuted run is the negative control and
     it is not optional;
@@ -36,7 +39,8 @@ def _ledger(path=None):
 
 def bench_campaign(tables=("buchwald", "concrete"),
                    arms=("random", "ofat", "fill", "ei", "logei", "ucb", "qei"),
-                   budget=64, seeds=(0, 1, 2), batch=8, control=True, quiet=False):
+                   budget=64, seeds=(0, 1, 2), batch=8, control=True, quiet=False,
+                   refits=(0,)):
     led = _ledger()
     env = led.environment()
     led.append("environment", "host", env)
@@ -48,7 +52,8 @@ def bench_campaign(tables=("buchwald", "concrete"),
                                    for k, v in meta.items()})
         t0 = time.time()
         recs = campaign.compare(space, codes, y, name, arms=arms, budget=budget,
-                                seeds=seeds, batch=batch, controls=control)
+                                seeds=seeds, batch=batch, controls=control,
+                                refits=tuple(refits))
         agg = campaign.aggregate(recs)
         out["tables"][name] = {
             "meta": {k: v for k, v in meta.items() if k != "snap_max_frac_of_range"},
@@ -58,7 +63,9 @@ def bench_campaign(tables=("buchwald", "concrete"),
                         for r in recs],
         }
         for a in agg:
-            led.append("campaign", f"{name}/{a['arm']}/{'control' if a['control'] else 'real'}",
+            led.append("campaign",
+                       "%s/%s/refit%d/%s" % (name, a["arm"], a["refit"],
+                                             "control" if a["control"] else "real"),
                        a, data_sha256=meta["sha256"])
         if not quiet:
             print(f"[campaign] {name}: {len(recs)} runs in {out['tables'][name]['seconds']}s",
@@ -66,8 +73,8 @@ def bench_campaign(tables=("buchwald", "concrete"),
             for a in agg:
                 if a["control"]:
                     continue
-                print("   %-7s gain %+6.2f +- %5.2f   rank %+0.3f   top10 %.2f"
-                      % (a["arm"], a["gain_mean"], a["gain_sd"],
+                print("   %-7s refit=%-2d gain %+6.2f +- %5.2f   rank %+0.3f   top10 %.2f"
+                      % (a["arm"], a["refit"], a["gain_mean"], a["gain_sd"],
                          a["rank_corr_mean"], a["top10_recovery_mean"]), flush=True)
     return out
 
@@ -189,6 +196,8 @@ def main(argv=None):
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--out", default=os.path.join(RESULTS, "summary.json"))
     ap.add_argument("--skip", default="")
+    ap.add_argument("--refits", default="0",
+                    help="fitting policies to run side by side, e.g. 0,8")
     a = ap.parse_args(argv)
     skip = set(s for s in a.skip.split(",") if s)
     out = {}
@@ -196,7 +205,8 @@ def main(argv=None):
         out["campaign"] = bench_campaign(
             tables=tuple(a.tables.split(",")),
             arms=tuple(a.arms.split(",")),
-            budget=a.budget, seeds=tuple(range(a.seeds)), batch=a.batch)
+            budget=a.budget, seeds=tuple(range(a.seeds)), batch=a.batch,
+            refits=tuple(int(x) for x in a.refits.split(",") if x.strip()))
     if "laws" not in skip:
         out["laws"] = bench_laws()
     if "spine" not in skip:

@@ -82,16 +82,25 @@ def assess(campaign, observed, k_frac=0.1, k_top=10):
 
 
 def run_one(space, codes, y, name="", arm="ei", budget=64, seed=0, batch=8,
-            k_frac=0.1, control=False, ctrl_seed=None):
-    """One campaign plus its held-out assessment, optionally with destroyed targets."""
+            k_frac=0.1, control=False, ctrl_seed=None, refit=0):
+    """One campaign plus its held-out assessment, optionally with destroyed targets.
+
+    `refit` is the fitting policy, and it is part of the arm rather than a detail:
+    0 fits the hyperparameters once on the initial design and then only conditions
+    the posterior, while `refit=8` re-runs the marginal-likelihood fit after every
+    batch. That single choice moves the Buchwald result by more than the gap
+    between the arms, so a record that does not carry it is not comparable with
+    one that does.
+    """
     yy = np.asarray(y, float)
     if control:
         yy = _permute(yy, np.random.default_rng(ctrl_seed if ctrl_seed is not None else seed + 991))
-    c = Campaign(space=space, codes=codes, y=yy, table=name, batch=batch, seed=seed)
+    c = Campaign(space=space, codes=codes, y=yy, table=name, batch=batch, seed=seed,
+                 refit_every=refit)
     observed, trace = c.run(budget, arm=arm)
     a = assess(c, observed, k_frac=k_frac)
     return {"table": name, "arm": arm, "budget": budget, "seed": seed,
-            "control": bool(control), "trace": trace, "heldout": a,
+            "control": bool(control), "refit": int(refit), "trace": trace, "heldout": a,
             "n_cells": c.n_cells, "coverage": c.coverage}
 
 
@@ -99,7 +108,8 @@ ARMS = ("random", "ofat", "fill", "ei", "logei", "ucb", "pi", "qei")
 
 
 def compare(space, codes, y, name="", arms=("random", "ofat", "ei", "logei", "ucb"),
-            budget=64, seeds=(0, 1, 2), batch=8, k_frac=0.1, controls=True):
+            budget=64, seeds=(0, 1, 2), batch=8, k_frac=0.1, controls=True,
+            refits=(0,)):
     """Every arm, every seed, with the permuted control for each arm.
 
     Returned as a flat list of records: one row per (arm, seed, control) so the
@@ -107,12 +117,14 @@ def compare(space, codes, y, name="", arms=("random", "ofat", "ei", "logei", "uc
     exactly what was computed.
     """
     out = []
-    for arm in arms:
-        for seed in seeds:
-            out.append(run_one(space, codes, y, name, arm, budget, seed, batch, k_frac))
-            if controls:
+    for refit in refits:
+        for arm in arms:
+            for seed in seeds:
                 out.append(run_one(space, codes, y, name, arm, budget, seed, batch,
-                                   k_frac, control=True))
+                                   k_frac, refit=refit))
+                if controls:
+                    out.append(run_one(space, codes, y, name, arm, budget, seed, batch,
+                                       k_frac, control=True, refit=refit))
     return out
 
 
@@ -122,16 +134,16 @@ def aggregate(records):
     for r in records:
         if r["heldout"] is None:
             continue
-        k = (r["arm"], r["control"])
+        k = (r["arm"], r["control"], r.get("refit", 0))
         keys.setdefault(k, []).append(r["heldout"])
     rows = []
-    for (arm, ctrl), hs in sorted(keys.items()):
+    for (arm, ctrl, refit), hs in sorted(keys.items()):
         g = np.asarray([h["gain"] for h in hs], float)
         rc = np.asarray([h["rank_corr"] for h in hs], float)
         rec = np.asarray([h["top10_recovery"] for h in hs], float)
         bf = np.asarray([h["best_seen_frac"] for h in hs], float)
         rows.append({
-            "arm": arm, "control": ctrl, "n": len(hs),
+            "arm": arm, "control": ctrl, "refit": refit, "n": len(hs),
             "gain_mean": float(g.mean()), "gain_sd": float(g.std(ddof=1)) if len(g) > 1 else 0.0,
             "rank_corr_mean": float(np.nanmean(rc)),
             "top10_recovery_mean": float(rec.mean()),
