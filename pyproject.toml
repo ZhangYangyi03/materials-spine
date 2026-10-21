@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "materials-spine"
+version = "1.0.0"
+description = "Experimental design on measured materials tables, with an audit trail: a metered screening campaign, engineering laws tested against their own controls, and a reaction-network reduction gate"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Yangyi Zhang", email = "zhangyangyi03@outlook.com"}]
+keywords = ["experimental-design", "bayesian-optimization", "materials",
+            "chemistry", "high-throughput-experimentation", "reproducible",
+            "chemical-kinetics", "uncertainty"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Chemistry",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = ["numpy>=1.21", "scipy>=1.7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/ZhangYangyi03/materials-spine"
+Source = "https://github.com/ZhangYangyi03/materials-spine"
+
+[project.scripts]
+mspine = "mspine.__main__:main"
+
+[tool.setuptools]
+packages = ["mspine"]
+
+[tool.setuptools.package-data]
+mspine = [
+  "tables/*.md", "tables/*.txt",
+  "tables/buchwald/*.csv", "tables/buchwald/*.txt",
+  "tables/ccpp/*.csv", "tables/concrete/*.csv", "tables/gasturbine/*.csv",
+  "tables/carbon_fiber/*.csv",
+  "mechanisms/*.py",
+]

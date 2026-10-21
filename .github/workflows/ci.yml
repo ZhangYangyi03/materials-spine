@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy scipy pytest
+
+      - name: the invariants
+        run: python -m pytest tests -q
+
+      - name: every pinned table still hashes to its recorded digest
+        run: python -m mspine verify
+
+      - name: the benchmark runs and its numbers land on the chain
+        run: |
+          python -m mspine bench --tables concrete --seeds 1 --budget 32
+          python -m mspine report
+
+      - name: the ledger chain is intact after the run
+        run: python -m mspine verify

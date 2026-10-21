@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, cite it as below."
+title: "materials-spine: experimental design on measured materials tables, with an audit trail"
+abstract: >-
+  A metered screening campaign over real measured tables, engineering laws tested
+  against permuted and shuffle controls, and a reaction-network reduction gate
+  whose blindness is measured across observation windows. Every reported number
+  is a row on an append-only hash chain that names the digest of the table it came
+  from.
+authors:
+  - family-names: Zhang
+    given-names: Yangyi
+    email: zhangyangyi03@outlook.com
+license: MIT
+type: software
+repository-code: "https://github.com/ZhangYangyi03/materials-spine"
+keywords:
+  - experimental design
+  - materials
+  - bayesian optimization
+  - reproducibility
