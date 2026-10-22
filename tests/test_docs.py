@@ -75,6 +75,18 @@ def test_the_readme_screening_table_is_the_chain(chain):
     assert not bad, "\n".join(bad)
 
 
+def test_the_readme_counts_are_the_chain(chain):
+    """The header block quotes row counts. They are the kind of number that is
+    right when written and wrong two commits later, so it is checked."""
+    rows, led = chain
+    text = _readme()
+    s = led.summary()
+    assert "%d campaign rows, %d total" % (s["by_kind"].get("campaign", 0), s["rows"]) in text
+    covers = sorted(100.0 * t["meta"]["cells_observed"] / t["meta"]["grid"]
+                    for t in bench.summary_from_ledger(None)["tables"].values())
+    assert "four tables" in text and "%.2f%%" % covers[0] in text
+
+
 def test_the_readme_law_numbers_are_the_chain(chain):
     _, led = chain
     text = _readme()

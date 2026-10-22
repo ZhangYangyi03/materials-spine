@@ -1,22 +1,26 @@
 # materials-spine
 
+[![ci](https://github.com/ZhangYangyi03/materials-spine/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhangYangyi03/materials-spine/actions/workflows/ci.yml)
+[![python](https://img.shields.io/badge/python-3.10%20%7C%203.12-blue)](pyproject.toml)
+[![licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
 A surrogate and an audit trail for materials chemistry where every evaluation is
-a **real experiment somebody already ran**. No simulator sits between the
-optimiser and the objective, so a claimed gain is a statement about data the
-method did not get to invent.
+a real experiment somebody already ran. No simulator sits between the optimiser
+and the objective, so a claimed gain is a statement about data the method did not
+get to invent.
 
-This is the merge of three earlier repositories, and it exists because splitting
-them was the mistake. They were one pipeline cut into three pieces:
+The one-line result, and the reason this repository exists: across four measured
+tables and eight acquisition rules, no Bayesian acquisition beats the best
+model-free baseline, and the repository says so with the control that shows the
+gains are real. Every number in this file is a row on a hash chain that names the
+digest of the table it came from, and a test fails if this file disagrees with
+that chain.
 
-    process-spine     the surrogate, the metered campaign, four measured tables
-    formula-screen    the engineering laws, the carbon-fibre table, the audit layer
-    kinetics-spine    the reaction-network reduction, with a gate
-
-The same Buchwald table shipped in two of them. The same held-out check was
-written twice. A gain quoted in one repo and a gate quoted in another could not be
-read against each other, because there was no single place where the provenance of
-the bytes and the number that came out of them met. Here they meet: one ledger,
-one hash chain, one report.
+    one ledger     330 campaign rows, 443 total, each hashed with its predecessor
+    one metric     held-out gain -- top decile of the cells the campaign did not spend
+    one control    the same pipeline on permuted responses, which must stay small
+    four tables   99.80%, 6.66%, 0.87%, 0.41% of their own design grids
+    five seeds    per arm, per table, per fitting policy
 
     python -m mspine tables      # what ships, with coverage and provenance per table
     python -m mspine bench       # run the campaigns, the laws and the mechanism

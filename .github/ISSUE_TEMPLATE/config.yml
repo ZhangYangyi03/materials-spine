@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How the audit layer works
+    url: https://github.com/ZhangYangyi03/materials-spine/blob/main/docs/paper.md
+    about: Section 7 names where the hash chain breaks and what makes it detectable
