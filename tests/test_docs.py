@@ -44,13 +44,18 @@ def test_the_readme_screening_table_is_the_chain(chain):
     rows, led = chain
     text = _readme()
     block = text[text.index("    table      arm"):text.index("(abridged")]
+    # derived from the tables the block actually names, so adding a table to the
+    # README cannot silently stop being checked (it did, for gasturbine).
+    tables_named = {l.split()[0] for l in block.splitlines()
+                    if l.strip() and l.split()[0].isalpha()
+                    and l.split()[0] in {k[0] for k in rows}}
     seen, bad = 0, []
     table = None
     for line in block.splitlines()[1:]:
         f = line.split()
         if not f:
             continue
-        if f[0] in ("buchwald", "ccpp", "concrete"):
+        if f[0] in tables_named:
             table = f[0]
             f = f[1:]
         if not table or len(f) < 8 or not re.fullmatch(r"[+-][\d.]+", f[2]):

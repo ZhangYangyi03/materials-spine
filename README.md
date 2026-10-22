@@ -43,7 +43,7 @@ memory of its own, which is the whole difference between a result and a story.
     table        rows   grid    cells  cover   target
     buchwald     4599   4608     4599  99.80%  isolated yield (%)
     ccpp         9568  65536     4367   6.66%  net hourly output
-    gasturbine  36733 390625     3381   0.87%  NOx emission
+    gasturbine  36733 390625     3381   0.87%  NOx emission (mg/m3)
     concrete     1030  65536      269   0.41%  28-day strength (MPa)
 
 Coverage is measured cells over the product grid. It is the honest measure of how
@@ -70,6 +70,11 @@ spent, minus the mean of all unspent cells), with the permuted control beside it
                qei        0     +27.06    1.58  +0.803   0.22    -0.07      35.8%
                ei         0     +26.39    1.93  +0.771   0.20    -0.13      35.0%
                random     0     +25.38    1.93  +0.926   0.02    +0.21      33.6%
+    gasturbine fill       0     +24.63    0.46  +0.719   0.06    -0.02      26.2%
+               random     0     +19.96    5.48  +0.677   0.00    -0.10      21.2%
+               ofat       0     +16.47    3.57  +0.512   0.02    +0.18      17.5%
+               qei        0     +15.44    4.78  +0.211   0.02    -0.14      16.4%
+               ei         0     +13.61    5.60  +0.163   0.02    +0.27      14.5%
     concrete   fill       0     +22.24    1.35  +0.797   0.32    +0.10      27.7%
                random     0     +20.23    3.18  +0.769   0.32    +0.06      25.2%
                ucb        0     +15.95    4.24  +0.364   0.28    +0.23      19.9%
@@ -86,12 +91,15 @@ standard deviation of 0.2 is a small real negative, which is what a surrogate
 fitted to noise should give you.
 
 The uncomfortable part, kept in the table rather than in a footnote: on none of
-the three tables does any Bayesian acquisition beat the best baseline a chemist
+the four tables does any Bayesian acquisition beat the best baseline a chemist
 would use without a model. On Buchwald the ordering is blunt -- random search
 +29.1, one-factor-at-a-time +27.6, space-filling +25.4, and all eight Bayesian
-arms below all three. That is not a tuning problem a better acquisition would fix;
-eight were run. If the project had reported only its best arm it would have
-reported the opposite of its own result.
+arms below all three. On gasturbine space-filling wins by 4.7 units over random
+search with a standard deviation of 0.46, which is the tightest result in the
+whole study and the least ambiguous: there is no seed noise left to explain it
+away. That is not a tuning problem a better acquisition would fix; eight were run.
+If the project had reported only its best arm it would have reported the opposite
+of its own result.
 
 **And the number depends on how the surrogate is fitted, which is why that is a
 column.** `qei` reaches +26.1 on Buchwald only when the marginal-likelihood fit is
