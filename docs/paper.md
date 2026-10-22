@@ -134,3 +134,40 @@ and batch sizes would say whether the stall is a property of refit=0 at batch 8
 or a property of seed 2. It has not been run, and until it is, the honest
 statement is the narrow one: on Buchwald at budget 64, batch 8, these five seeds,
 refit=8 removes one stall. Nothing here licenses a general claim about re-tuning.
+
+## 7. Appendix: what the audit layer had to be built out of
+
+The claim in the introduction -- "anything not on the chain does not appear in the
+report" -- is only worth the failure modes it survives, and two of them were found
+by trying to break it rather than by design. Both are recorded here because an
+audit trail that describes itself as unbreakable is a claim, and one that names
+where it breaks is an instrument.
+
+The first is a canonicalisation bug that made an honest ledger report itself as
+tampered. `json.dumps` writes the integer key `56` as the string `"56"` in numeric
+order, and `json.loads` reads it back in lexical order -- so a payload shaped
+`{56: ..., 90: ..., 180: ..., 365: ...}` hashed to bytes the file does not
+contain, and every verify after a reload returned BROKEN. The fix is a canonical
+form that sorts keys by their string rendering on both the write and the read
+side; the test is `test_ledger.py::test_int_keys_round_trip`, and it is the reason
+the hydration law (which is keyed by age) can be stored at all.
+
+The second is structural and cannot be fixed, only published: a hash chain detects
+an edit to any interior row and cannot detect an edit to the tail, because the
+tail is by definition the last thing nothing points at. This was measured, not
+assumed -- a row was rewritten in place and re-hashed, and `verify()` returned OK.
+The remedy is the one transparency logs use: publish the head somewhere the ledger
+cannot reach. `mspine anchor` writes `results/anchor.json`, `verify` compares the
+chain head with it, and the CI workflow commits the anchor on every push. With the
+anchor in place the same rewritten tail fails at seq 80 of 81. A repository whose
+ledger is checked against a digest in its own commit is auditable by anyone who
+can read the commit; one that is not is auditable only by its author.
+
+The third is a resolution limit inherited from the numerics and reported rather
+than papered over: at 400 RK4 steps the solver's own self-error against a 16x
+refined run is 9e-4, three orders coarser than the 1e-6 tolerance the reduction
+gate tests against. The gate therefore cannot be finer than its integrator, and
+the report prints the floor next to the tolerance so that "equivalent to 1e-6"
+cannot be read as a claim about the physics. `test_laws_and_mechanism.py::
+test_integration_floor_is_reported_and_coarser_than_the_gate` fails if the two ever
+swap order.
