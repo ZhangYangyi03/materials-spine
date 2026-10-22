@@ -92,11 +92,23 @@ def main(argv=None):
             note = ("" if not hidden else
                     "\n(%d arm/policy rows come from runs with a different seed"
                     " count, are on the chain, and are not shown)" % hidden)
-            print("\nSCREENING %s -- held-out gain, %d seeds; control = the same"
-                  % (table, n_mode))
-            print("           pipeline on permuted responses, which must collapse to zero")
-            print("  %-7s %3s %7s %8s %8s %8s %8s %7s"
-                  % ("arm", "rfi", "n", "gain", "sd", "rank", "top10", "control"))
+            mt = (_latest(led, "table", table) or [{"payload": {}}])[-1]["payload"]
+            print("\nSCREENING %s -- %s, %d measured rows over a %d-cell grid (%.2f%%"
+                  " covered), %d seeds" % (table, mt.get("target", "?"),
+                                           mt.get("rows", 0), mt.get("grid", 0),
+                                           100.0 * mt.get("cells_observed", 0)
+                                           / max(mt.get("grid", 1), 1), n_mode))
+            print("  gain = top decile of the unspent cells by predicted value, minus"
+                  " the mean of all unspent cells")
+            print("  control = the same pipeline on responses permuted across cells: it"
+                  " should be small, and it is")
+            span = None
+            meta = (_latest(led, "table", table) or [{"payload": {}}])[-1]["payload"]
+            lo, hi = (meta.get("response_range") or [None, None])[:2]
+            if lo is not None and hi is not None and hi > lo:
+                span = hi - lo
+            print("  %-7s %3s %7s %8s %7s %7s %7s %8s %7s"
+                  % ("arm", "rfi", "n", "gain", "sd", "rank", "top10", "control", "%rng"))
             order = sorted(by, key=lambda a: -by[a].get(False, {}).get("gain_mean", -1e9))
             for key in order:
                 arm, refit = key
@@ -104,16 +116,27 @@ def main(argv=None):
                 if p is None or p["n"] != n_mode:
                     continue
                 c = by[key].get(True)
-                print("  %-7s %3d %7d %+8.2f %8.2f %+8.3f %8.2f %7s"
+                print("  %-7s %3d %7d %+8.2f %7.2f %+7.3f %7.2f %8s %6.1f%%"
                       % (arm, refit, p["n"], p["gain_mean"], p["gain_sd"],
                          p["rank_corr_mean"], p["top10_recovery_mean"],
-                         ("%+.2f" % c["gain_mean"]) if c else "-"))
+                         ("%+.2f" % c["gain_mean"]) if c else "-",
+                         100.0 * p["gain_mean"] / span if span else float("nan")))
             shown = [k for k in order if by[k].get(False)
                      and by[k][False]["n"] == n_mode]
             if shown:
                 b = shown[0]
                 print("  best held-out gain: %s (refit=%d, %+.2f)"
                       % (b[0], b[1], by[b][False]["gain_mean"]))
+            if shown:
+                b = shown[0]
+                c = by[b].get(True)
+                if c and by[b][False]["gain_mean"]:
+                    share = abs(c["gain_mean"]) / abs(by[b][False]["gain_mean"])
+                    print("  its control is %.0f%% of that gain: small, not zero -- and"
+                          % (100 * share))
+                    print("  a few tenths of a unit is what %d seeds can resolve, so the"
+                          % by[b][False]["n"])
+                    print("  control column is a scale, not a threshold.")
             print(note)
 
     for r in _last(_latest(led, "law", "hydration/form")):
@@ -130,7 +153,7 @@ def main(argv=None):
         p = r["payload"]
         print("  carrier of k, held-out R2 with a permuted-target control:")
         for name, d in p["carriers"].items():
-            print("     %-24s %+0.3f   control95 %+0.3f   p=%.3f"
+            print("     %-24s %+0.3f   null95 %+0.3f   p=%.3f"
                   % (name, d["r2_heldout"], d.get("perm_p95", float("nan")),
                      d.get("p", float("nan"))))
     for r in _last(_latest(led, "law", "weibull/test")):
@@ -150,10 +173,15 @@ def main(argv=None):
         p = r["payload"]
         print("\nMECHANISM SPINE (%s, %d species / %d reactions)"
               % (p["mechanism"], p["species"], p["reactions"]))
+        print("  %-26s %5s %8s %9s %9s %s"
+              % ("reduction", "rxns", "balance", "trajectory", "lost flux", "gate"))
         for row in p["search"]:
-            print("  %-26s -> %2d rxns  balance %.1e  traj %.1e  %s"
-                  % (row["label"], row["reactions"], row["balance"],
-                     row["trajectory"], "KEPT" if row["ok"] else "refused"))
+            print("  %-26s %5d %8.1e %9.1e %9.1e %s%s"
+                  % (row["label"], row["reactions"], row["balance"], row["trajectory"],
+                     row.get("dropped_flux_share", float("nan")),
+                     "KEPT" if row["ok"] else "refused",
+                     " (vacuous: the dropped steps carry no flux)"
+                     if row.get("vacuous") else ""))
         if "property" in p:
             print("  property H2 ceiling: full %s, reduced %s"
                   % (p["property"]["full"]["status"], p["property"]["reduced"]["status"]))

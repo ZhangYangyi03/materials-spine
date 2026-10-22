@@ -6,5 +6,9 @@ dist/
 .pytest_cache/
 .venv/
 results/*.json
+# ...except the published head digest: the anchor is the one file the whole
+# ledger depends on and it is worthless if it only ever exists on the machine
+# that made it.
+!results/anchor.json
 results/_*.log
 *.log

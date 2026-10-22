@@ -6,10 +6,18 @@ or docs/paper.md, and nothing else. If a refactor changes the result, the failur
 should name the document that is now lying rather than the function that moved.
 
 Every one of these runs whole campaigns on the 4599-cell Buchwald table, so they
-are marked `slow` and opt-in (`pytest -m slow`). They are also the reason the
-campaigns are run once and shared: this host's allocator dies when the same
-Buchwald family is re-materialised a dozen times in one process, and a test suite
-that only passes on a big machine is a test suite that gets annotated away.
+are marked `slow` and opt-in (`pytest -m slow`), and CI runs both sets. They are
+also the reason the campaigns are cached per test session: this host's allocator
+dies when the same Buchwald family is re-materialised a dozen times in one
+process, and a test suite that only passes on a big machine is a test suite that
+gets annotated away.
+
+The first version of this file asserted on best-so-far/ceiling, because that is
+what the documents quoted. When the documents moved to held-out gain -- the
+metric that asks about rows the campaign did not choose -- the assertions moved
+with them, and both metrics turn out to show the same thing: one seed carries
+the refit gap. That agreement is the reason the claim survived a change of
+metric, and it is worth stating so that neither metric looks like the safe one.
 """
 import gc
 import os
@@ -21,23 +29,10 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mspine import campaign, data
-from mspine.loop import Campaign
 
 pytestmark = pytest.mark.slow
 
 _CACHE = {}
-
-
-def _best_frac(space, codes, y, arm, seed, refit, budget=64):
-    key = (arm, seed, refit, budget)
-    if key not in _CACHE:
-        c = Campaign(space=space, codes=codes, y=y, batch=8, seed=seed, init=8,
-                     refit_every=refit)
-        obs, tr = c.run(budget, arm=arm)
-        _CACHE[key] = tr[-1]["best"] / c.ceiling
-        del c
-        gc.collect()
-    return _CACHE[key]
 
 
 @pytest.fixture(scope="module")
@@ -47,36 +42,47 @@ def buchwald():
     return space, codes, y
 
 
-def test_buchwald_qei_at_refit8_is_the_published_0_9896(buchwald):
-    """docs/paper.md section 2 quotes 0.9896 +- 0.010 for qei at refit=8."""
+def _gain(space, codes, y, arm, seed, refit, budget=64):
+    """Held-out gain: the number docs/paper.md quotes. It calls the same function
+    the benchmark calls, so a refactor that moves the metric moves this too."""
+    key = ("gain", arm, seed, refit, budget)
+    if key not in _CACHE:
+        _CACHE[key] = campaign.heldout_gain(space, codes, y, "buchwald", arm=arm,
+                                            budget=budget, seed=seed, refit=refit)
+        gc.collect()
+    return _CACHE[key]
+
+
+@pytest.mark.parametrize("refit,mean,sd", [(0, 22.20, 7.10), (8, 26.06, 8.94)])
+def test_buchwald_qei_gain_at_both_fitting_policies(buchwald, refit, mean, sd):
+    """docs/paper.md section 2 quotes these for qei, 5 seeds, budget 64, batch 8."""
     space, codes, y = buchwald
-    vals = [_best_frac(space, codes, y, "qei", s, 8) for s in range(5)]
-    assert np.mean(vals) == pytest.approx(0.9896, abs=2e-3)
-    assert np.std(vals) == pytest.approx(0.010, abs=3e-3)
+    vals = [_gain(space, codes, y, "qei", s, refit) for s in range(5)]
+    assert np.mean(vals) == pytest.approx(mean, abs=0.05)
+    assert np.std(vals, ddof=1) == pytest.approx(sd, abs=0.05)
 
 
-def test_one_seed_carries_the_refit_gap(buchwald):
-    """docs/paper.md section 3: three seeds untouched, one seed is the gap.
+def test_the_refit_gap_is_one_seed_and_its_spread_is_wider(buchwald):
+    """docs/paper.md section 3, and the sentence in section 2 that says the effect
+    is smaller than its own spread.
 
-    The first version asserted four untouched seeds and failed on seed 4, which
-    moves by -0.0038. That disagreement between a document and a run is exactly
-    what this file exists to surface: the claim is "one seed carries the gap",
-    not "four seeds are bit-identical".
+    The claim is narrow on purpose: one seed out of five recovers from a stall by
+    a large margin, three of the other four move the wrong way, and the sd of the
+    per-seed difference is larger than its mean. The first version of this file
+    asserted the same thing on best-so-far/ceiling and it was true there too --
+    two metrics, one seed. If either test starts failing, the document is what is
+    wrong, not the test.
     """
     space, codes, y = buchwald
-    same, moved = 0, []
-    for s in range(5):
-        a = _best_frac(space, codes, y, "qei", s, 0)
-        b = _best_frac(space, codes, y, "qei", s, 8)
-        if abs(a - b) < 1e-9:
-            same += 1
-        else:
-            moved.append((s, a, b))
-    assert same == 3, "unchanged seeds: %d, moved: %r" % (same, moved)
-    big = [m for m in moved if m[2] - m[1] > 0.1]
-    small = [m for m in moved if abs(m[2] - m[1]) <= 0.1]
-    assert len(big) == 1, "the gap is no longer one seed: %r" % (moved,)
-    assert len(small) == 1 and small[0][1] > small[0][2], moved
+    a = np.array([_gain(space, codes, y, "qei", s, 0) for s in range(5)])
+    b = np.array([_gain(space, codes, y, "qei", s, 8) for s in range(5)])
+    d = b - a
+    i = int(np.argmax(d))
+    assert d[i] > 25.0, "the stall-and-recover seed is gone: %r" % (d.tolist(),)
+    assert int((d < 0).sum()) >= 2, "re-tuning now helps most seeds: %r" % (d.tolist(),)
+    assert d.std(ddof=1) > abs(d.mean()), "the effect is no longer smaller than its spread"
+    # and the mean is what the section quotes
+    assert b.mean() - a.mean() == pytest.approx(3.86, abs=0.1)
 
 
 def test_no_bayesian_arm_beats_ofat_on_buchwald(buchwald):

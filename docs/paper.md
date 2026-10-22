@@ -16,8 +16,8 @@ headline.
 
 Two differences turn out to be load-bearing, and neither was written down:
 
-    metric    best-so-far / ceiling      rows the campaign itself chose to run
-              held-out screening gain    rows it never saw
+    metric    best-so-far / ceiling      rows the campaign itself chose to run (n=5)
+              held-out screening gain    rows it never saw (n=5)
 
     fit       refit=0   hyperparameters fitted once on the initial design, then
                         held while the posterior is conditioned
@@ -29,51 +29,45 @@ gain with refit=0. So the disagreement was not about the data or the seeds.
 ## 2. The fitting policy, isolated
 
 Same table, same 64-experiment budget, batches of 8, same 8-point initial design,
-same seeds. One variable:
+five seeds, one variable. Held-out gain, which is the metric this package reports
+for the reasons in section 4:
 
-    buchwald, 5 seeds, best-so-far / ceiling
-      arm      refit=0             refit=8
-      qei      0.9422 +- 0.101     0.9896 +- 0.010
-      ei       0.9429 +- 0.078     0.9760 +- 0.033
-      ofat     0.9785 +- 0.026     0.9785 +- 0.026    no surrogate: identical by construction
-      random   0.9394 +- 0.061     0.9394 +- 0.061    no surrogate
+    buchwald, held-out gain, 5 seeds
+      arm      refit=0              refit=8
+      qei      +22.20 +- 7.10       +26.06 +- 8.94
+      ei       +21.97 +- 4.71       not re-run
+      fill     +25.38 +- 4.06       no surrogate: identical by construction
+      ofat     +27.61 +- 4.34       identical by construction
+      random   +29.12 +- 4.15       identical by construction
 
-Re-tuning is worth +0.047 to batch EI here, and the arms without a surrogate do
-not move by a single digit, which is the check that the variable is the surrogate
-and not the seed. `process-spine`'s published number reproduces exactly at
-refit=8.
+Re-tuning is worth +3.9 to `qei` on this table, and the three arms without a
+surrogate do not move by a digit -- which is the check that the variable is the
+surrogate and not the seed. (`ei` at refit=8 was not re-run at five seeds; the
+three-seed study that did run it is on the chain as `buchwald/ei/refit8/real`.) The first version of this section quoted a +0.047 on
+best-so-far/ceiling, reproducing `process-spine`'s published number at refit=8;
+that metric is the one section 4 argues against, and the effect is +3.9 units of
+yield on the metric that asks about rows the campaign did not choose.
 
-## 3. And then it stops being a result
+## 3. And then most of it stops being a result
 
-The mean is carried by one seed out of five:
+Per seed, held-out gain on Buchwald:
 
-    buchwald, per seed, best-so-far / ceiling
-      arm   seed    0       1       2       3       4
-      qei   r0   0.9729  0.9969  0.7414  1.0000  1.0000
-      qei   r8   0.9729  0.9969  0.9818  1.0000  0.9962
-      ei    r0   0.9165  0.9969  0.8014  1.0000  1.0000
-      ei    r8   0.9729  0.9969  0.9139  1.0000  0.9962
+    arm   refit   seed0    seed1    seed2    seed3    seed4     mean
+    qei   r0     +24.52   +22.69   +10.42   +29.59   +23.80    +22.20
+    qei   r8     +22.66   +19.84   +40.96   +19.32   +27.53    +26.06
 
-Three of five seeds are bit-identical under both policies; a fourth moves by
--0.0038. The entire +0.047 is seed 2 recovering from a stall, which alone
-contributes +0.048 of the mean. "Re-tuning is what makes batch EI work" is not
-supported by five seeds of which three are untouched and a fourth moves the wrong
-way by a thousandth. What is supported is "one seed in five stalls without
-re-tuning, and re-tuning unsticks it". Different claims; the second one is worth
-knowing, and a test now fails if the pattern changes
-(`tests/test_published.py::test_one_seed_carries_the_refit_gap`).
+Seed 2 is the whole difference: +10.42 without re-tuning, +40.96 with it, a
++30.5 swing on that seed alone, contributing +6.1 to a five-seed mean. On the
+other four seeds re-tuning is -1.9, -2.9, -10.3 and +3.7 -- three of four worse.
+The mean is positive because one seed recovered from a stall by a large margin,
+and the standard deviation is 7-9 units, which is larger than the effect.
 
-Re-tuning also has no consistent sign. On ccpp, same budget, same seeds, held-out
-gain:
-
-    ccpp, held-out gain, 3 seeds
-      ei       refit=0  +26.90      refit=8  +21.96      worse
-      qei      refit=0  +27.32      refit=8  +28.19      better
-      fill     no surrogate, +28.74 either way
-      ofat     no surrogate, +27.35 either way
-
-So the policy is a source of variance to be reported, not a dial to be set to
-whatever wins.
+So "re-tuning is what makes batch EI work" is not supported, and neither is
+"re-tuning is a dial to be set to whatever wins". What is supported, and it is
+narrower: on Buchwald at budget 64, batch 8, refit=0 lets batch EI stall on at
+least one seed, and refit=8 unsticks it at the cost of variance elsewhere.
+Different claims; the second is worth knowing and the first was what both
+repositories' prose implied.
 
 ## 4. Which metric is the measurement
 
@@ -85,19 +79,31 @@ asks about the cells the campaign did not spend:
     fit on what the campaign spent, rank the unspent cells, take the top decile,
     compare their measured mean with the measured mean of all unspent cells
 
-Under that metric, three seeds, both policies, the merged table:
+Under that metric, five seeds, the merged table (`python -m mspine report`, all
+rows on the chain):
 
-    table      best arm        best Bayesian arm         permuted control
-    buchwald   ofat +28.58     qei +27.82 (refit=8)      collapses to ~0
-    ccpp       fill +28.74     qei +28.19 (refit=8)      collapses to ~0
-    concrete   fill +21.51     ucb +16.92 (refit=0)      collapses to ~0
+    table      best arm            best Bayesian arm       permuted control
+    buchwald   random +29.12       qei +26.06 (refit=8)     +0.05 .. +1.27
+    ccpp       fill +28.76         pi +27.61                -0.53 .. +0.21
+    concrete   fill +22.24         pi +12.85                -0.39 .. +0.45
 
 No Bayesian acquisition beats the best model-free baseline on any of the three
-tables, under either fitting policy or metric. The controls collapse, so the gains
-are real; they are just not the surrogate's wins. On concrete the ordering is
-blunt: greedy space-filling +21.5, random +18.9, UCB +16.9,
-one-factor-at-a-time +16.3. Random search is second best on a table 0.41% covered
-by its own grid, which says more about the table than about random search.
+tables, under either fitting policy. On Buchwald the ordering is blunt: random
+search +29.1, one-factor-at-a-time +27.6, greedy space-filling +25.4, and every
+Bayesian arm below all three. That is not a tuning problem to be fixed by choosing
+a better acquisition -- eight arms were run.
+
+The controls are small and not zero: the largest is +1.27, about 1.3% of the yield
+range, against real gains of 22-29 units. Read the control column as a scale
+rather than a threshold. With five seeds a control row that reads +1.27 with a
+standard deviation of 1.9 is not distinguishable from zero; a row that reads -0.53
+with a standard deviation of 0.2 is, and it is a small negative, which is what a
+surrogate fitted to noise should produce.
+
+On concrete, random search is second best on a grid its own table covers 0.41% of,
+which says more about the table than about random search: with 269 measured cells
+out of 65536, a surrogate has very little to learn from and a space-filling
+baseline is already near-optimal.
 
 ## 5. What this changes in the repository
 
@@ -120,8 +126,10 @@ of a published gain is one seed.
 
 ## 6. What this does not show
 
-Three seeds for the per-table means, five for the per-seed table. One table
-decides the refit question, and it decides it on one seed. A sweep over budgets
+Five seeds for every per-table mean, which is enough to show the ordering between
+random search and every Bayesian arm is stable on Buchwald and not enough to
+resolve a 3.9-unit effect whose per-seed spread is 7-9. One table decides the
+refit question, and it is decided by one seed. A sweep over budgets
 and batch sizes would say whether the stall is a property of refit=0 at batch 8
 or a property of seed 2. It has not been run, and until it is, the honest
 statement is the narrow one: on Buchwald at budget 64, batch 8, these five seeds,

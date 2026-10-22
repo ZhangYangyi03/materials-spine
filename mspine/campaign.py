@@ -81,6 +81,23 @@ def assess(campaign, observed, k_frac=0.1, k_top=10):
     return out
 
 
+def heldout_gain(space, codes, y, name="", arm="ei", budget=64, seed=0, batch=8,
+                 k_frac=0.1, refit=0):
+    """One campaign, reduced to the single number the documents quote.
+
+    `test_published.py` needs to re-derive a published gain without paying for the
+    permuted control that `run_one` runs beside it. Keeping the metric here, in one
+    place, is the point: the test and the benchmark call the same code, so a
+    refactor cannot move the number in the report and leave the test agreeing with
+    the old one.
+    """
+    c = Campaign(space=space, codes=codes, y=np.asarray(y, float), table=name,
+                 batch=batch, seed=seed, refit_every=refit)
+    observed, _ = c.run(budget, arm=arm)
+    a = assess(c, observed, k_frac=k_frac)
+    return float(a["gain"]) if a else float("nan")
+
+
 def run_one(space, codes, y, name="", arm="ei", budget=64, seed=0, batch=8,
             k_frac=0.1, control=False, ctrl_seed=None, refit=0):
     """One campaign plus its held-out assessment, optionally with destroyed targets.

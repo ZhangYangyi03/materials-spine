@@ -145,6 +145,7 @@ def buchwald():
         "sha256": digest, "rows": int(len(y)), "grid": space.size,
         "cells_observed": int(len({tuple(c) for c in codes.tolist()})),
         "target": "isolated yield (%)", "categorical": True,
+        "response_range": [float(y.min()), float(y.max())],
         "censored": int((y == 0).sum()),
         "censored_note": "yield == 0 means no product detected, not a measured 0.0",
     }
@@ -207,6 +208,7 @@ def continuous_table(path, factor_cols, target_col, n_levels=12, q=(0.01, 0.99),
         "levels_per_factor": n_levels, "grid": int(space.size),
         "cells_observed": cells, "coverage": cells / space.size,
         "target": target_col, "categorical": False,
+        "response_range": [float(y.min()), float(y.max())],
         "quantisation": "equal-width levels across the [q_lo, q_hi] range, "
                         "rows snapped to the nearest level",
         "snap_max_frac_of_range": snap,

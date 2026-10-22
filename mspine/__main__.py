@@ -4,6 +4,9 @@
     bench     run the campaigns, the laws and the mechanism spine; write the ledger
     report    print the numbers the ledger holds, grouped by arm and by control
     verify    re-derive the hash chain and every pinned table digest
+    anchor    write results/anchor.json -- the head digest, published outside the
+              ledger; verify then checks the chain against it, which is the only
+              way an edit to the last row becomes detectable
 
 Nothing here needs a notebook, and nothing here writes a number that is not also
 a row on the chain.
@@ -57,7 +60,15 @@ def _verify(argv):
                         "results", "ledger.jsonl")
     if os.path.exists(path):
         led = L.Ledger(path)
-        good, bad = led.verify()
+        anchor_path = os.path.join(os.path.dirname(path), "anchor.json")
+        anchor_head = None
+        if os.path.exists(anchor_path):
+            with open(anchor_path, encoding="utf-8") as f:
+                anchor = json.load(f)
+            anchor_head = anchor.get("head")
+            print("anchor %-11s %d rows, head %s (%s)"
+                  % ("", anchor.get("rows", 0), (anchor_head or "")[:16], anchor.get("at")))
+        good, bad = led.verify(anchor_head=anchor_head)
         print("ledger %-11s %d rows, chain %s" % ("", len(led.rows),
               "OK" if good else "BROKEN at seq %d" % bad))
         ok = ok and good
@@ -66,9 +77,29 @@ def _verify(argv):
     return 0 if ok else 1
 
 
+def _anchor(argv):
+    from . import ledger as L
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, "results", "ledger.jsonl")
+    if not os.path.exists(path):
+        print("no ledger at %s -- run `python -m mspine bench` first" % path)
+        return 1
+    led = L.Ledger(path)
+    good, bad = led.verify()
+    if not good:
+        print("refusing to anchor a broken chain (first bad row: %s)" % bad)
+        return 1
+    out = os.path.join(root, "results", "anchor.json")
+    a = led.anchor(out)
+    print("anchored %d rows, head %s" % (a["rows"], a["head"]))
+    print("wrote %s -- commit it next to the ledger it names." % os.path.relpath(out, root))
+    return 0
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    cmds = {"tables": _tables, "bench": _bench, "report": _report, "verify": _verify}
+    cmds = {"tables": _tables, "bench": _bench, "report": _report,
+            "verify": _verify, "anchor": _anchor}
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0

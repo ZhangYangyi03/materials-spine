@@ -59,8 +59,8 @@ def bench_campaign(tables=("buchwald", "concrete"),
             "meta": {k: v for k, v in meta.items() if k != "snap_max_frac_of_range"},
             "arms": agg,
             "seconds": round(time.time() - t0, 1),
-            "records": [{k: r[k] for k in ("arm", "seed", "control", "heldout")}
-                        for r in recs],
+            "records": [{k: r.get(k) for k in ("arm", "seed", "control", "refit",
+                                               "heldout")} for r in recs],
         }
         for a in agg:
             led.append("campaign",
@@ -149,6 +149,53 @@ def bench_spine(quiet=False):
     return out
 
 
+def summary_from_ledger(out=None, need=3):
+    """Rebuild the summary from the chain alone.
+
+    The part files are a convenience; the chain is the record. This reads the last
+    row per (table, arm, refit, control) out of results/ledger.jsonl and prints
+    the table -- so a benchmark run in ten pieces across ten processes, or across
+    ten restarts, is one result. `need` is the number of seeds below which a group
+    is reported as underpowered instead of being quietly averaged.
+    """
+    led = _ledger()
+    ok, bad = led.verify()
+    tables, envs = {}, []
+    for r in led.of_kind("environment"):
+        envs.append(r["payload"])
+    for r in led.of_kind("table"):
+        # the newest table row wins: a re-run re-measured the shape, and an older
+        # row may predate a field (response_range) that the report now prints.
+        tables.setdefault(r["subject"], {"meta": {}, "arms": {}})["meta"] = r["payload"]
+    for r in led.of_kind("campaign"):
+        name = r["subject"].split("/")[0]
+        p = r["payload"]
+        key = (p["arm"], p.get("refit", 0), bool(p["control"]))
+        # append-only: a later row for the same key supersedes, and superseding is
+        # visible in the history rather than an overwrite.
+        tables.setdefault(name, {"meta": {}, "arms": {}})["arms"][key] = p
+    out_doc = {"chain": {"ok": ok, "first_bad": bad, "rows": len(led.rows),
+                         "head": led.head},
+               "env": envs[-1] if envs else None, "tables": {}}
+    for name, d in tables.items():
+        rows = [{"arm": k[0], "refit": k[1], "control": k[2], **v}
+                for k, v in d["arms"].items()]
+        out_doc["tables"][name] = {
+            "meta": {k: v for k, v in (d["meta"] or {}).items()
+                     if k != "snap_max_frac_of_range"},
+            "arms": sorted(rows, key=lambda a: (a["refit"], a["arm"], a["control"])),
+            "underpowered": [("%s/%s/refit%d/%s"
+                              % (name, a["arm"], a["refit"],
+                                 "control" if a["control"] else "real"))
+                             for a in rows if a["n"] < need],
+        }
+    if out:
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(out_doc, f, indent=2, sort_keys=True)
+    return out_doc
+
+
 def merge(paths, out):
     """Combine several bench runs into one summary.
 
@@ -179,6 +226,30 @@ def merge(paths, out):
                 merged[section] = part[section]
     for name, d in merged["tables"].items():
         d["arms"] = campaign.aggregate(d["records"])
+
+    # Cross-check against the chain: every (table, arm, refit, control) group in
+    # the merged summary must exist on the ledger with the same gain. A merged
+    # file that disagrees with the chain is a merged file nobody can audit.
+    led = _ledger()
+    chain = {}
+    for r in led.of_kind("campaign"):
+        p = r["payload"]
+        chain["%s/%s/refit%d/%s" % (r["subject"].split("/")[0], p["arm"],
+                                    p.get("refit", 0),
+                                    "control" if p["control"] else "real")] = p
+    merged["chain_crosscheck"] = {"rows": len(chain), "checked": 0, "mismatch": []}
+    for name, d in merged["tables"].items():
+        for a in d["arms"]:
+            key = "%s/%s/refit%d/%s" % (name, a["arm"], a["refit"],
+                                        "control" if a["control"] else "real")
+            ref = chain.get(key)
+            if ref is None:
+                merged["chain_crosscheck"]["mismatch"].append([key, "absent from chain"])
+                continue
+            merged["chain_crosscheck"]["checked"] += 1
+            if abs(ref["gain_mean"] - a["gain_mean"]) > 1e-9:
+                merged["chain_crosscheck"]["mismatch"].append(
+                    [key, ref["gain_mean"], a["gain_mean"]])
     if out:
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "w", encoding="utf-8") as f:

@@ -40,5 +40,8 @@ jobs:
           python -m mspine bench --tables concrete --seeds 1 --budget 32
           python -m mspine report
 
-      - name: the ledger chain is intact after the run
+      - name: the ledger chain is intact after the run, against the committed anchor
         run: python -m mspine verify
+
+      - name: publish the new head, so the next commit is checkable against it
+        run: python -m mspine anchor
