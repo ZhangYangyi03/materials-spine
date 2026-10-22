@@ -32,7 +32,12 @@ jobs:
       - name: the published numbers still come out the same
         run: python -m pytest tests -q -m slow
 
-      - name: every pinned table still hashes to its recorded digest
+      # This is the audit, and it has to come before anything appends: the
+      # committed anchor names the head of the committed ledger. A check after
+      # the benchmark runs compares a fresh chain with a stale digest and fails
+      # for the right reason but the wrong cause -- which is exactly what the
+      # first version of this workflow did.
+      - name: every pinned table hashes to its digest, and the chain matches the committed anchor
         run: python -m mspine verify
 
       - name: the benchmark runs and its numbers land on the chain
@@ -40,8 +45,8 @@ jobs:
           python -m mspine bench --tables concrete --seeds 1 --budget 32
           python -m mspine report
 
-      - name: the ledger chain is intact after the run, against the committed anchor
-        run: python -m mspine verify
+      - name: the chain is still intact after a run appended to it
+        run: python -m mspine verify --chain-only
 
       - name: publish the new head, so the next commit is checkable against it
         run: python -m mspine anchor

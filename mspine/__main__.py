@@ -62,7 +62,7 @@ def _verify(argv):
         led = L.Ledger(path)
         anchor_path = os.path.join(os.path.dirname(path), "anchor.json")
         anchor_head = None
-        if os.path.exists(anchor_path):
+        if os.path.exists(anchor_path) and "--chain-only" not in (argv or []):
             with open(anchor_path, encoding="utf-8") as f:
                 anchor = json.load(f)
             anchor_head = anchor.get("head")
