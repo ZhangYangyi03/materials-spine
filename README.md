@@ -16,11 +16,13 @@ gains are real. Every number in this file is a row on a hash chain that names th
 digest of the table it came from, and a test fails if this file disagrees with
 that chain.
 
-    one ledger     330 campaign rows, 443 total, each hashed with its predecessor
-    one metric     held-out gain -- top decile of the cells the campaign did not spend
-    one control    the same pipeline on permuted responses, which must stay small
-    four tables   99.80%, 6.66%, 0.87%, 0.41% of their own design grids
-    five seeds    per arm, per table, per fitting policy
+| | |
+|---|---|
+| **one ledger** | 330 campaign rows, 443 total, each hashed with its predecessor |
+| **one metric** | held-out gain: top decile of the cells the campaign did not spend |
+| **one control** | the same pipeline on permuted responses, which must stay small |
+| **four tables** | 99.80%, 6.66%, 0.87%, 0.41% of their own product grids |
+| **five seeds** | per arm, per table, per fitting policy |
 
     python -m mspine tables      # what ships, with coverage and provenance per table
     python -m mspine bench       # run the campaigns, the laws and the mechanism
